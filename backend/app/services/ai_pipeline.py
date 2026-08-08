@@ -1,0 +1,194 @@
+import os
+import logging
+from typing import List, Tuple, Dict, Any
+from PyPDF2 import PdfReader
+from langchain.text_splitter import RecursiveCharacterTextSplitter
+from sentence_transformers import SentenceTransformer
+import faiss
+import numpy as np
+import pickle
+
+from app.config import settings
+
+logger = logging.getLogger("ai_pipeline")
+
+# Initialize Embedding Model lazily
+_embedding_model = None
+
+def get_embedding_model():
+    global _embedding_model
+    if _embedding_model is None:
+        logger.info(f"Loading sentence-transformer: {settings.EMBEDDING_MODEL_NAME}")
+        _embedding_model = SentenceTransformer(settings.EMBEDDING_MODEL_NAME)
+    return _embedding_model
+
+class LocalFAISSStore:
+    def __init__(self):
+        self.index_path = settings.FAISS_INDEX_PATH
+        self.index_file = os.path.join(self.index_path, "index.faiss")
+        self.meta_file = os.path.join(self.index_path, "metadata.pkl")
+        
+        # Dimensions for bge-small-en-v1.5 is 384
+        self.dimension = 384 
+        self.index = None
+        self.metadata = [] # List of dicts matching FAISS indices: {"source": str, "page": int, "content": str}
+        
+        self.load_index()
+
+    def load_index(self):
+        os.makedirs(self.index_path, exist_ok=True)
+        if os.path.exists(self.index_file) and os.path.exists(self.meta_file):
+            try:
+                self.index = faiss.read_index(self.index_file)
+                with open(self.meta_file, "rb") as f:
+                    self.metadata = pickle.load(f)
+                logger.info(f"Loaded existing FAISS index with {len(self.metadata)} vectors.")
+            except Exception as e:
+                logger.error(f"Failed to load FAISS index: {e}. Reinitializing.")
+                self._initialize_empty()
+        else:
+            self._initialize_empty()
+
+    def _initialize_empty(self):
+        self.index = faiss.IndexFlatIP(self.dimension)  # Inner Product (cosine similarity since vectors are normalized)
+        self.metadata = []
+        logger.info("Initialized empty FAISS index.")
+
+    def save_index(self):
+        os.makedirs(self.index_path, exist_ok=True)
+        faiss.write_index(self.index, self.index_file)
+        with open(self.meta_file, "wb") as f:
+            pickle.dump(self.metadata, f)
+        logger.info("Saved FAISS index to disk.")
+
+    def add_texts(self, texts: List[str], metadatas: List[Dict[str, Any]]):
+        model = get_embedding_model()
+        # Compute embeddings
+        embeddings = model.encode(texts, convert_to_numpy=True, normalize_embeddings=True)
+        
+        # Add to index
+        self.index.add(embeddings)
+        self.metadata.extend(metadatas)
+        self.save_index()
+
+    def similarity_search(self, query: str, k: int = 4) -> List[Dict[str, Any]]:
+        if len(self.metadata) == 0:
+            return []
+        
+        model = get_embedding_model()
+        query_vector = model.encode([query], convert_to_numpy=True, normalize_embeddings=True)
+        
+        distances, indices = self.index.search(query_vector, k)
+        
+        results = []
+        for dist, idx in zip(distances[0], indices[0]):
+            if idx < 0 or idx >= len(self.metadata):
+                continue
+            item = self.metadata[idx].copy()
+            item["score"] = float(dist)
+            results.append(item)
+        return results
+
+# Singleton instance of vector store
+vector_store = None
+
+def get_vector_store():
+    global vector_store
+    if vector_store is None:
+        vector_store = LocalFAISSStore()
+    return vector_store
+
+async def ingest_pdf(pdf_path: str, filename: str) -> int:
+    """
+    Extracts text from PDF, chunks it, embeds and saves to FAISS.
+    Returns the number of chunks added.
+    """
+    logger.info(f"Starting ingestion for {filename}")
+    reader = PdfReader(pdf_path)
+    
+    chunks = []
+    metadatas = []
+    
+    text_splitter = RecursiveCharacterTextSplitter(
+        chunk_size=800,
+        chunk_overlap=150,
+        length_function=len
+    )
+    
+    for i, page in enumerate(reader.pages):
+        page_num = i + 1
+        text = page.extract_text()
+        if not text or not text.strip():
+            continue
+            
+        page_chunks = text_splitter.split_text(text)
+        for chunk in page_chunks:
+            chunks.append(chunk)
+            metadatas.append({
+                "source": filename,
+                "page": page_num,
+                "content": chunk
+            })
+            
+    if chunks:
+        store = get_vector_store()
+        store.add_texts(chunks, metadatas)
+        logger.info(f"Ingested {len(chunks)} chunks from {filename}")
+        
+    return len(chunks)
+
+async def query_rag_pipeline(query: str, history: List[Any] = []) -> Tuple[str, List[Dict[str, Any]]]:
+    """
+    Given a query, retrieves context from FAISS and queries Gemini to get a citation-based answer.
+    """
+    store = get_vector_store()
+    retrieved_items = store.similarity_search(query, k=4)
+    
+    # Format context
+    context_str = ""
+    citations = []
+    
+    for i, item in enumerate(retrieved_items):
+        context_str += f"[Source {i+1}]: {item['source']} (Page {item['page']})\nContent: {item['content']}\n\n"
+        citations.append({
+            "source": item["source"],
+            "page": item["page"],
+            "content": item["content"]
+        })
+        
+    # Construct LLM prompt
+    system_prompt = (
+        "You are an expert AI Legal Assistant specializing in Bangladeshi law. Your task is to answer "
+        "the user's legal query based on the retrieved context segments of laws and constitution. "
+        "Strictly adhere to the following rules:\n"
+        "1. Provide a professional, precise, and citation-based legal answer.\n"
+        "2. Cite your sources clearly by referencing the document name and page number from the context.\n"
+        "3. If the retrieved context does not contain enough information to answer, state that the context is insufficient, "
+        "but provide a helpful general answer based on your knowledge of Bangladesh laws, clearly distinguishing between your knowledge and the context.\n\n"
+        "Retrieved Context:\n"
+        f"{context_str}\n"
+        f"User Query: {query}"
+    )
+
+    # Let's import Groq integration
+    from langchain_groq import ChatGroq
+    
+    try:
+        # Initialize Groq using Llama 3.3 70B
+        llm = ChatGroq(
+            model="llama-3.3-70b-versatile",
+            groq_api_key=settings.GROQ_API_KEY or os.getenv("GROQ_API_KEY")
+        )
+        
+        response = await llm.ainvoke(system_prompt)
+        answer = response.content
+    except Exception as e:
+        logger.error(f"Failed to use langchain-groq: {e}. Falling back to mockup answer.")
+        answer = (
+            f"Note: Groq API execution fell back or wasn't configured with a valid GROQ_API_KEY.\n\n"
+            f"Based on the retrieved Bangladeshi statutes from '{citations[0]['source'] if citations else 'Constitution'}':\n"
+            f"\"{citations[0]['content'][:300] if citations else 'No context loaded.'}...\"\n\n"
+            f"For professional counsel, please configure your GROQ_API_KEY in the backend .env configuration."
+        )
+
+    return answer, citations
