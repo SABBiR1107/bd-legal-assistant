@@ -48,33 +48,42 @@ export default function AdminDashboard() {
   const API_BASE = getApiBase();
 
 
-  const fetchDocumentsAndStats = async () => {
+  const fetchDocumentsAndStats = async (retries = 3) => {
     setLoadingDocs(true);
     setBackendError(null);
-    try {
-      const response = await fetch(`${API_BASE}/api/documents`);
-      if (!response.ok) {
-        throw new Error(`Server returned ${response.status}: ${response.statusText}`);
+    for (let attempt = 1; attempt <= retries; attempt++) {
+      try {
+        const response = await fetch(`${API_BASE}/api/documents`);
+        if (!response.ok) {
+          throw new Error(`Server returned ${response.status}: ${response.statusText}`);
+        }
+        const data = await response.json();
+        setDocuments(data.documents || []);
+        setStats({
+          total_docs: data.documents?.length || 0,
+          total_chunks: data.documents?.reduce((acc: number, curr: LegalDocument) => acc + curr.chunk_count, 0) || 0,
+          faiss_status: "Active (Local Index)"
+        });
+        setBackendError(null);
+        setLoadingDocs(false);
+        return;
+      } catch (error: any) {
+        if (attempt < retries) {
+          await new Promise((r) => setTimeout(r, 2000 * attempt));
+        } else {
+          console.error("Failed to load documents", error);
+          const isNetworkError = error instanceof TypeError || error.message.includes("fetch") || error.message.includes("Load failed");
+          setBackendError(
+            isNetworkError
+              ? `Connecting to backend at ${API_BASE}... (Render free servers take 30-50s to wake up on first load. Please click retry).`
+              : `Backend error: ${error.message}`
+          );
+        }
       }
-      const data = await response.json();
-      setDocuments(data.documents || []);
-      setStats({
-        total_docs: data.documents?.length || 0,
-        total_chunks: data.documents?.reduce((acc: number, curr: LegalDocument) => acc + curr.chunk_count, 0) || 0,
-        faiss_status: "Active (Local Index)"
-      });
-    } catch (error: any) {
-      console.error("Failed to load documents", error);
-      const isNetworkError = error instanceof TypeError && error.message === 'Failed to fetch';
-      setBackendError(
-        isNetworkError
-          ? `Cannot connect to backend at ${API_BASE}. Make sure the uvicorn server is running on port 8000.`
-          : `Backend error: ${error.message}`
-      );
-    } finally {
-      setLoadingDocs(false);
     }
+    setLoadingDocs(false);
   };
+
 
   useEffect(() => {
     fetchDocumentsAndStats();

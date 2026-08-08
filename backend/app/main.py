@@ -29,6 +29,16 @@ app = FastAPI(
     debug=settings.DEBUG
 )
 
+# ─── CORS (Must be added first so all responses & preflights have CORS headers) ──
+if settings.BACKEND_CORS_ORIGINS:
+    app.add_middleware(
+        CORSMiddleware,
+        allow_origin_regex=".*",
+        allow_credentials=True,
+        allow_methods=["*"],
+        allow_headers=["*"],
+    )
+
 # ─── Rate Limiting (slowapi) ───────────────────────────────────────────────
 try:
     from slowapi import Limiter, _rate_limit_exceeded_handler
@@ -44,15 +54,6 @@ try:
 except ImportError:
     logger.warning("⚠️ slowapi not installed — rate limiting disabled. Run: pip install slowapi")
 
-# ─── CORS ─────────────────────────────────────────────────────────────────
-if settings.BACKEND_CORS_ORIGINS:
-    app.add_middleware(
-        CORSMiddleware,
-        allow_origins=["*"],
-        allow_credentials=False,
-        allow_methods=["*"],
-        allow_headers=["*"],
-    )
 
 
 # ─── Routers ──────────────────────────────────────────────────────────────
