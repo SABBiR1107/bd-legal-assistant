@@ -12,8 +12,8 @@ class Settings(BaseSettings):
     # Groq API Key
     GROQ_API_KEY: str = ""
     
-    # Embeddings
-    EMBEDDING_MODEL_NAME: str = "BAAI/bge-small-en-v1.5"
+    # Embeddings - Multilingual model supports Bengali + English + 50 other languages
+    EMBEDDING_MODEL_NAME: str = "sentence-transformers/paraphrase-multilingual-MiniLM-L12-v2"
     
     # FAISS local path
     FAISS_INDEX_PATH: str = str(Path(__file__).parent.parent / "data" / "faiss")

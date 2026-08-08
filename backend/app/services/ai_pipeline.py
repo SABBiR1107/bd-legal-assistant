@@ -1,4 +1,5 @@
 import os
+import re
 import logging
 from typing import List, Tuple, Dict, Any
 from PyPDF2 import PdfReader
@@ -11,6 +12,20 @@ import pickle
 from app.config import settings
 
 logger = logging.getLogger("ai_pipeline")
+
+# ─── Language Detection ───────────────────────────────────────────────────────
+def detect_language(text: str) -> str:
+    """
+    Detect if the query is in Bengali or English.
+    Returns 'bn' for Bengali, 'en' for English.
+    """
+    # Bengali Unicode range: \u0980–\u09FF
+    bengali_chars = len(re.findall(r'[\u0980-\u09FF]', text))
+    total_chars = len(text.replace(' ', ''))
+    if total_chars == 0:
+        return 'en'
+    bengali_ratio = bengali_chars / total_chars
+    return 'bn' if bengali_ratio > 0.2 else 'en'
 
 # Initialize Embedding Model lazily
 _embedding_model = None
@@ -156,15 +171,32 @@ async def query_rag_pipeline(query: str, history: List[Any] = []) -> Tuple[str, 
             "content": item["content"]
         })
         
+    # ─── Detect language and build bilingual prompt ───────────────────────────
+    user_lang = detect_language(query)
+    
+    if user_lang == 'bn':
+        language_instruction = (
+            "IMPORTANT: The user has asked in Bengali (বাংলা). You MUST respond entirely in Bengali (বাংলা). "
+            "Use formal Bengali legal terminology. Do not respond in English.\n"
+        )
+    else:
+        language_instruction = (
+            "The user has asked in English. Respond in clear, professional English.\n"
+        )
+
     # Construct LLM prompt
     system_prompt = (
-        "You are an expert AI Legal Assistant specializing in Bangladeshi law. Your task is to answer "
-        "the user's legal query based on the retrieved context segments of laws and constitution. "
+        "You are an expert AI Legal Assistant (আইনি সহকারী) specializing in Bangladeshi law "
+        "(বাংলাদেশের আইন ও সংবিধান). Your task is to answer the user's legal query based on "
+        "the retrieved context segments of laws and constitution.\n\n"
+        f"{language_instruction}"
         "Strictly adhere to the following rules:\n"
         "1. Provide a professional, precise, and citation-based legal answer.\n"
         "2. Cite your sources clearly by referencing the document name and page number from the context.\n"
-        "3. If the retrieved context does not contain enough information to answer, state that the context is insufficient, "
-        "but provide a helpful general answer based on your knowledge of Bangladesh laws, clearly distinguishing between your knowledge and the context.\n\n"
+        "3. If the retrieved context does not contain enough information to answer, state that the "
+        "context is insufficient, but provide a helpful general answer based on your knowledge of "
+        "Bangladesh laws — clearly distinguishing between your knowledge and the retrieved context.\n"
+        "4. Answer in the SAME LANGUAGE the user used to ask the question.\n\n"
         "Retrieved Context:\n"
         f"{context_str}\n"
         f"User Query: {query}"
