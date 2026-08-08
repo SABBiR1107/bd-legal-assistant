@@ -1,5 +1,6 @@
 import os
 import re
+import asyncio
 import logging
 import pickle
 from typing import List, Tuple, Dict, Any
@@ -8,6 +9,7 @@ from langchain.text_splitter import RecursiveCharacterTextSplitter
 import faiss
 import numpy as np
 from app.config import settings
+
 
 logger = logging.getLogger("ai_pipeline")
 
@@ -149,7 +151,7 @@ async def ingest_pdf(pdf_path: str, filename: str) -> int:
             
     if chunks:
         store = get_vector_store()
-        store.add_texts(chunks, metadatas)
+        await asyncio.to_thread(store.add_texts, chunks, metadatas)
         logger.info(f"Ingested {len(chunks)} chunks from {filename}")
         
     return len(chunks)
@@ -159,7 +161,8 @@ async def query_rag_pipeline(query: str, history: List[Any] = []) -> Tuple[str, 
     Given a query, retrieves context from FAISS and queries Gemini to get a citation-based answer.
     """
     store = get_vector_store()
-    retrieved_items = store.similarity_search(query, k=4)
+    retrieved_items = await asyncio.to_thread(store.similarity_search, query, 4)
+
     
     # Format context
     context_str = ""
@@ -236,7 +239,8 @@ async def stream_rag_pipeline(query: str, history: list = []):
     Yields dicts: {type: 'chunk', content: str} and finally {type: 'done', full_answer, citations}
     """
     store = get_vector_store()
-    retrieved_items = store.similarity_search(query, k=4)
+    retrieved_items = await asyncio.to_thread(store.similarity_search, query, 4)
+
 
     context_str = ""
     citations = []
