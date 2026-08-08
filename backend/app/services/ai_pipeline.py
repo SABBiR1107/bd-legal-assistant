@@ -1,14 +1,12 @@
 import os
 import re
 import logging
+import pickle
 from typing import List, Tuple, Dict, Any
 from PyPDF2 import PdfReader
 from langchain.text_splitter import RecursiveCharacterTextSplitter
-from sentence_transformers import SentenceTransformer
 import faiss
 import numpy as np
-import pickle
-
 from app.config import settings
 
 logger = logging.getLogger("ai_pipeline")
@@ -19,7 +17,6 @@ def detect_language(text: str) -> str:
     Detect if the query is in Bengali or English.
     Returns 'bn' for Bengali, 'en' for English.
     """
-    # Bengali Unicode range: \u0980–\u09FF
     bengali_chars = len(re.findall(r'[\u0980-\u09FF]', text))
     total_chars = len(text.replace(' ', ''))
     if total_chars == 0:
@@ -33,9 +30,14 @@ _embedding_model = None
 def get_embedding_model():
     global _embedding_model
     if _embedding_model is None:
+        import torch
+        torch.set_num_threads(1)
+        from sentence_transformers import SentenceTransformer
         logger.info(f"Loading sentence-transformer: {settings.EMBEDDING_MODEL_NAME}")
         _embedding_model = SentenceTransformer(settings.EMBEDDING_MODEL_NAME)
     return _embedding_model
+
+
 
 class LocalFAISSStore:
     def __init__(self):
