@@ -48,9 +48,10 @@ export default function AdminDashboard() {
   const API_BASE = getApiBase();
 
 
-  const fetchDocumentsAndStats = async (retries = 3) => {
+  const fetchDocumentsAndStats = async () => {
     setLoadingDocs(true);
     setBackendError(null);
+    const retries = 3;
     for (let attempt = 1; attempt <= retries; attempt++) {
       try {
         const response = await fetch(`${API_BASE}/api/documents`);
@@ -83,6 +84,7 @@ export default function AdminDashboard() {
     }
     setLoadingDocs(false);
   };
+
 
 
   useEffect(() => {
@@ -179,7 +181,7 @@ export default function AdminDashboard() {
         </div>
         <div className="flex items-center gap-4">
           <button 
-            onClick={fetchDocumentsAndStats}
+            onClick={() => fetchDocumentsAndStats()}
             className="p-2 hover:bg-slate-800 rounded-lg text-slate-400 hover:text-white transition-colors"
           >
             <RefreshCw className="h-4 w-4" />
@@ -198,7 +200,7 @@ export default function AdminDashboard() {
               <p className="font-semibold">Backend Connection Failed</p>
               <p className="mt-0.5 text-rose-400/80">{backendError}</p>
               <button
-                onClick={fetchDocumentsAndStats}
+                onClick={() => fetchDocumentsAndStats()}
                 className="mt-2 text-xs underline hover:text-rose-300 transition-colors"
               >
                 Retry connection
