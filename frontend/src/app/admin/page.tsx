@@ -40,9 +40,13 @@ export default function AdminDashboard() {
     if (url.endsWith("/api")) {
       url = url.slice(0, -4);
     }
+    if (url.startsWith("http://") && !url.includes("localhost") && !url.includes("127.0.0.1")) {
+      url = url.replace("http://", "https://");
+    }
     return url;
   };
   const API_BASE = getApiBase();
+
 
   const fetchDocumentsAndStats = async () => {
     setLoadingDocs(true);
