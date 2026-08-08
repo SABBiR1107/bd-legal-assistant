@@ -56,18 +56,12 @@ except ImportError:
 
 
 
-# ─── Startup Pre-Warming ───────────────────────────────────────────────────
+# ─── Startup ─────────────────────────────────────────────────────────────
 @app.on_event("startup")
 async def startup_event():
-    import asyncio
-    from app.services.ai_pipeline import get_embedding_model, get_vector_store
-    logger.info("⚡ Pre-warming Embedding model and FAISS vector store on startup...")
-    try:
-        await asyncio.to_thread(get_vector_store)
-        await asyncio.to_thread(get_embedding_model)
-        logger.info("✅ Embedding model & Vector store pre-warmed successfully!")
-    except Exception as e:
-        logger.error(f"Failed to pre-warm embedding model: {e}")
+    # NOTE: Embedding model loads lazily on first request to stay within
+    # Render Free Tier 512MB RAM limit. Do NOT pre-warm here.
+    logger.info("✅ Server started. Embedding model will load on first request.")
 
 # ─── Routers ──────────────────────────────────────────────────────────────
 app.include_router(legal_router, prefix="/api")

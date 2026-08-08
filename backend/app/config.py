@@ -12,8 +12,9 @@ class Settings(BaseSettings):
     # Groq API Key
     GROQ_API_KEY: str = os.getenv("GROQ_API_KEY", "")
     
-    # Embeddings - Multilingual model supports Bengali + English + 50 other languages
-    EMBEDDING_MODEL_NAME: str = os.getenv("EMBEDDING_MODEL_NAME", "sentence-transformers/paraphrase-multilingual-MiniLM-L12-v2")
+    # Embeddings - Lightweight model that fits within Render Free Tier 512MB RAM
+    # all-MiniLM-L6-v2: ~80MB, 384-dim - fast and memory-efficient
+    EMBEDDING_MODEL_NAME: str = os.getenv("EMBEDDING_MODEL_NAME", "sentence-transformers/all-MiniLM-L6-v2")
     
     # FAISS local path
     FAISS_INDEX_PATH: str = os.getenv("FAISS_INDEX_PATH", str(Path(__file__).parent.parent / "data" / "faiss"))
