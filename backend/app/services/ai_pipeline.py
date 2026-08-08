@@ -82,8 +82,14 @@ class LocalFAISSStore:
 
     def add_texts(self, texts: List[str], metadatas: List[Dict[str, Any]]):
         model = get_embedding_model()
-        # Compute embeddings
-        embeddings = model.encode(texts, convert_to_numpy=True, normalize_embeddings=True)
+        # Compute embeddings efficiently with batching
+        embeddings = model.encode(
+            texts,
+            batch_size=32,
+            show_progress_bar=False,
+            convert_to_numpy=True,
+            normalize_embeddings=True
+        )
         
         # Add to index
         self.index.add(embeddings)
@@ -95,7 +101,7 @@ class LocalFAISSStore:
             return []
         
         model = get_embedding_model()
-        query_vector = model.encode([query], convert_to_numpy=True, normalize_embeddings=True)
+        query_vector = model.encode([query], batch_size=1, show_progress_bar=False, convert_to_numpy=True, normalize_embeddings=True)
         
         distances, indices = self.index.search(query_vector, k)
         
@@ -129,10 +135,11 @@ async def ingest_pdf(pdf_path: str, filename: str) -> int:
     metadatas = []
     
     text_splitter = RecursiveCharacterTextSplitter(
-        chunk_size=800,
-        chunk_overlap=150,
+        chunk_size=1000,
+        chunk_overlap=100,
         length_function=len
     )
+
     
     for i, page in enumerate(reader.pages):
         page_num = i + 1

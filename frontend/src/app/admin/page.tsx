@@ -122,7 +122,7 @@ export default function AdminDashboard() {
       const data = await response.json();
       setUploadStatus({
         type: "success",
-        message: `Successfully processed "${file.name}"! Created ${data.chunks_count} chunks & added to FAISS vector store.`
+        message: `Successfully processed "${file.name}"! Created ${data.chunk_count || 0} chunks & added to FAISS vector store.`
       });
       setFile(null);
       // Reset input element
@@ -131,14 +131,19 @@ export default function AdminDashboard() {
       
       fetchDocumentsAndStats();
     } catch (error: any) {
+      console.error(error);
+      const isNetworkError = error instanceof TypeError || error.message.includes("fetch") || error.message.includes("Load failed");
       setUploadStatus({
         type: "error",
-        message: error.message || "Failed to process and index legal document."
+        message: isNetworkError
+          ? `Connection error. If deploying on Render Free Tier, please wait ~30 seconds for the backend to wake up and try uploading again.`
+          : error.message || "Failed to process and index legal document."
       });
     } finally {
       setUploading(false);
     }
   };
+
 
   const handleDelete = async (id: number) => {
     if (!confirm("Are you sure you want to delete this document from the vector store?")) return;
