@@ -1,5 +1,5 @@
 import logging
-from fastapi import FastAPI
+from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
 from app.config import settings
 
@@ -23,7 +23,22 @@ app = FastAPI(
     debug=settings.DEBUG
 )
 
-# Set up CORS
+# ─── Rate Limiting (slowapi) ───────────────────────────────────────────────
+try:
+    from slowapi import Limiter, _rate_limit_exceeded_handler
+    from slowapi.util import get_remote_address
+    from slowapi.errors import RateLimitExceeded
+    from slowapi.middleware import SlowAPIMiddleware
+
+    limiter = Limiter(key_func=get_remote_address, default_limits=["200/day", "60/hour"])
+    app.state.limiter = limiter
+    app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
+    app.add_middleware(SlowAPIMiddleware)
+    logger.info("✅ Rate limiting enabled (slowapi)")
+except ImportError:
+    logger.warning("⚠️ slowapi not installed — rate limiting disabled. Run: pip install slowapi")
+
+# ─── CORS ─────────────────────────────────────────────────────────────────
 if settings.BACKEND_CORS_ORIGINS:
     app.add_middleware(
         CORSMiddleware,
@@ -33,9 +48,15 @@ if settings.BACKEND_CORS_ORIGINS:
         allow_headers=["*"],
     )
 
-# Include API Router
+# ─── Routers ──────────────────────────────────────────────────────────────
 app.include_router(legal_router, prefix="/api")
+
 
 @app.get("/")
 def read_root():
-    return {"message": "Welcome to Bangladesh AI Legal Assistant API", "status": "healthy"}
+    return {
+        "message": "Welcome to Bangladesh AI Legal Assistant API",
+        "status": "healthy",
+        "version": "2.0.0",
+        "features": ["RAG Pipeline", "Bengali Support", "Streaming SSE", "Chat History", "Rate Limiting"]
+    }

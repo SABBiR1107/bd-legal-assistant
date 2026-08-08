@@ -165,10 +165,12 @@ async def query_rag_pipeline(query: str, history: List[Any] = []) -> Tuple[str, 
     
     for i, item in enumerate(retrieved_items):
         context_str += f"[Source {i+1}]: {item['source']} (Page {item['page']})\nContent: {item['content']}\n\n"
+        confidence = round(min(max(float(item.get('score', 0)), 0), 1) * 100, 1)
         citations.append({
             "source": item["source"],
             "page": item["page"],
-            "content": item["content"]
+            "content": item["content"],
+            "confidence": confidence
         })
         
     # ─── Detect language and build bilingual prompt ───────────────────────────
@@ -224,3 +226,65 @@ async def query_rag_pipeline(query: str, history: List[Any] = []) -> Tuple[str, 
         )
 
     return answer, citations
+
+
+async def stream_rag_pipeline(query: str, history: list = []):
+    """
+    Streaming version of query_rag_pipeline.
+    Yields dicts: {type: 'chunk', content: str} and finally {type: 'done', full_answer, citations}
+    """
+    store = get_vector_store()
+    retrieved_items = store.similarity_search(query, k=4)
+
+    context_str = ""
+    citations = []
+    for i, item in enumerate(retrieved_items):
+        context_str += f"[Source {i+1}]: {item['source']} (Page {item['page']})\nContent: {item['content']}\n\n"
+        confidence = round(min(max(float(item.get('score', 0)), 0), 1) * 100, 1)
+        citations.append({
+            "source": item["source"],
+            "page": item["page"],
+            "content": item["content"],
+            "confidence": confidence
+        })
+
+    user_lang = detect_language(query)
+    language_instruction = (
+        "IMPORTANT: The user has asked in Bengali (\u09ac\u09be\u0982\u09b2\u09be). You MUST respond entirely in Bengali. "
+        "Use formal Bengali legal terminology. Do not respond in English.\n"
+        if user_lang == 'bn' else
+        "The user has asked in English. Respond in clear, professional English.\n"
+    )
+
+    system_prompt = (
+        "You are an expert AI Legal Assistant (\u0986\u0987\u09a8\u09bf \u09b8\u09b9\u0995\u09be\u09b0\u09c0) specializing in Bangladeshi law "
+        "(\u09ac\u09be\u0982\u09b2\u09be\u09a6\u09c7\u09b6\u09c7\u09b0 \u0986\u0987\u09a8 \u0993 \u09b8\u0982\u09ac\u09bf\u09a7\u09be\u09a8).\n\n"
+        f"{language_instruction}"
+        "Rules:\n"
+        "1. Provide professional, precise, citation-based legal answers.\n"
+        "2. Cite sources by document name and page number.\n"
+        "3. If context is insufficient, provide general knowledge while noting the limitation.\n"
+        "4. Answer in the SAME LANGUAGE the user used.\n\n"
+        f"Retrieved Context:\n{context_str}\n"
+        f"User Query: {query}"
+    )
+
+    from langchain_groq import ChatGroq
+    llm = ChatGroq(
+        model="llama-3.3-70b-versatile",
+        groq_api_key=settings.GROQ_API_KEY or os.getenv("GROQ_API_KEY"),
+        streaming=True
+    )
+
+    full_answer = ""
+    try:
+        async for chunk in llm.astream(system_prompt):
+            if chunk.content:
+                full_answer += chunk.content
+                yield {"type": "chunk", "content": chunk.content}
+    except Exception as e:
+        logger.error(f"Streaming failed: {e}")
+        full_answer = f"Streaming error: {str(e)}"
+        yield {"type": "chunk", "content": full_answer}
+
+    yield {"type": "done", "full_answer": full_answer, "citations": citations}
