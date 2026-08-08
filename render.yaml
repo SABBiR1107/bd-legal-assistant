@@ -13,7 +13,7 @@ services:
       - key: GROQ_API_KEY
         sync: false
       - key: DATABASE_URL
-        value: sqlite:///./sql_app.db
+        value: postgresql://postgres.jssneznhmddpjnchyieq:bd-legal-assistant@aws-0-ap-northeast-1.pooler.supabase.com:5432/postgres?sslmode=require
 
   # ─── Frontend Next.js Service ──────────────────────────────────────
   - type: web
