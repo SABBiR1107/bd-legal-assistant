@@ -16,8 +16,19 @@ export default function RootLayout({
 }: Readonly<{
   children: React.ReactNode;
 }>) {
+  const rawKey = process.env.NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY;
+  const isValidKey =
+    rawKey &&
+    (rawKey.startsWith("pk_test_") || rawKey.startsWith("pk_live_")) &&
+    !rawKey.includes("...");
+
+  const clerkPublishableKey = isValidKey
+    ? rawKey
+    : "pk_test_cG9zc2libGUtaGFyZS03NS5jbGVyay5hY2NvdW50cy5kZXYk";
+
   return (
     <ClerkProvider
+      publishableKey={clerkPublishableKey}
       appearance={{
         baseTheme: dark,
         variables: {

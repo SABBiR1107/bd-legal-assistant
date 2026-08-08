@@ -1,44 +1,36 @@
-﻿services:
-  # ─────────────────────────────────────────
-  # 1. FastAPI Backend
-  # ─────────────────────────────────────────
+services:
+  # ─── Backend API Service ───────────────────────────────────────────
   - type: web
-    name: bd-legal-backend
+    name: bd-legal-assistant-backend
     env: python
     rootDir: backend
     buildCommand: pip install -r requirements.txt
     startCommand: uvicorn app.main:app --host 0.0.0.0 --port $PORT
-    plan: free
     envVars:
-      - key: DATABASE_URL
-        sync: false
+      - key: PYTHON_VERSION
+        value: 3.10.12
       - key: GROQ_API_KEY
         sync: false
-      - key: EMBEDDING_MODEL_NAME
-        value: BAAI/bge-small-en-v1.5
-      - key: FAISS_INDEX_PATH
-        value: data/faiss
-      - key: DEBUG
-        value: false
-      - key: BACKEND_CORS_ORIGINS
-        value: '["*"]'
+      - key: DATABASE_URL
+        value: sqlite:///./sql_app.db
 
-  # ─────────────────────────────────────────
-  # 2. Next.js Frontend
-  # ─────────────────────────────────────────
+  # ─── Frontend Next.js Service ──────────────────────────────────────
   - type: web
-    name: bd-legal-frontend
+    name: bd-legal-assistant-frontend
     env: node
     rootDir: frontend
     buildCommand: npm install && npm run build
-    startCommand: npm run start
-    plan: free
+    startCommand: npm start
     envVars:
+      - key: NODE_VERSION
+        value: 20.10.0
+      - key: NEXT_PUBLIC_API_URL
+        fromService:
+          type: web
+          name: bd-legal-assistant-backend
+          property: url
       - key: NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY
         sync: false
       - key: CLERK_SECRET_KEY
         sync: false
-      - key: NEXT_PUBLIC_API_URL
-        sync: false
-      - key: PORT
-        value: 3000
+

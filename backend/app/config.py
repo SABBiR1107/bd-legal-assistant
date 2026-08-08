@@ -4,19 +4,19 @@ from pathlib import Path
 
 class Settings(BaseSettings):
     PROJECT_NAME: str = "Bangladesh AI Legal Assistant API"
-    DEBUG: bool = True
+    DEBUG: bool = False
     
     # Database Settings
-    DATABASE_URL: str = "postgresql://postgres:postgrespassword@localhost:5432/bd_legal_assistant"
+    DATABASE_URL: str = os.getenv("DATABASE_URL", "sqlite:///./sql_app.db")
     
     # Groq API Key
-    GROQ_API_KEY: str = ""
+    GROQ_API_KEY: str = os.getenv("GROQ_API_KEY", "")
     
     # Embeddings - Multilingual model supports Bengali + English + 50 other languages
-    EMBEDDING_MODEL_NAME: str = "sentence-transformers/paraphrase-multilingual-MiniLM-L12-v2"
+    EMBEDDING_MODEL_NAME: str = os.getenv("EMBEDDING_MODEL_NAME", "sentence-transformers/paraphrase-multilingual-MiniLM-L12-v2")
     
     # FAISS local path
-    FAISS_INDEX_PATH: str = str(Path(__file__).parent.parent / "data" / "faiss")
+    FAISS_INDEX_PATH: str = os.getenv("FAISS_INDEX_PATH", str(Path(__file__).parent.parent / "data" / "faiss"))
     
     # CORS Origins
     BACKEND_CORS_ORIGINS: list[str] = ["*"]

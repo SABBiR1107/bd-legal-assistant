@@ -75,6 +75,7 @@ app.include_router(legal_router, prefix="/api")
 
 
 @app.get("/")
+@app.get("/health")
 def read_root():
     return {
         "message": "Welcome to Bangladesh AI Legal Assistant API",

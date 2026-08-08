@@ -58,12 +58,22 @@ export default function Home() {
   const messagesEndRef = useRef<HTMLDivElement>(null);
 
   const getApiBase = () => {
-    let url = (process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000").trim().replace(/\/+$/, "");
+    let url = (process.env.NEXT_PUBLIC_API_URL || "https://bd-legal-assistant-1.onrender.com").trim().replace(/\/+$/, "");
+
+    if (typeof window !== "undefined") {
+      const hostname = window.location.hostname;
+      const isLocalHost = hostname === "localhost" || hostname === "127.0.0.1" || hostname.startsWith("192.168.") || hostname.startsWith("10.") || hostname.startsWith("172.");
+      
+      if (isLocalHost) {
+        if (!process.env.NEXT_PUBLIC_API_URL || process.env.NEXT_PUBLIC_API_URL.includes("localhost")) {
+          const protocol = window.location.protocol;
+          return `${protocol}//${hostname}:8000`;
+        }
+      }
+    }
+
     if (url.endsWith("/api")) {
       url = url.slice(0, -4);
-    }
-    if (url.startsWith("http://") && !url.includes("localhost") && !url.includes("127.0.0.1")) {
-      url = url.replace("http://", "https://");
     }
     return url;
   };
