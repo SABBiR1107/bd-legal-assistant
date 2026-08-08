@@ -26,17 +26,17 @@ def detect_language(text: str) -> str:
     bengali_ratio = bengali_chars / total_chars
     return 'bn' if bengali_ratio > 0.2 else 'en'
 
-# Initialize Embedding Model lazily
+# Initialize Embedding Model lazily (fastembed - ONNX Runtime, ~100MB RAM)
 _embedding_model = None
 
 def get_embedding_model():
     global _embedding_model
     if _embedding_model is None:
-        import torch
-        torch.set_num_threads(1)
-        from sentence_transformers import SentenceTransformer
-        logger.info(f"Loading sentence-transformer: {settings.EMBEDDING_MODEL_NAME}")
-        _embedding_model = SentenceTransformer(settings.EMBEDDING_MODEL_NAME)
+        from fastembed import TextEmbedding
+        # BAAI/bge-small-en-v1.5: 384-dim, ~70MB ONNX model - fits Render Free Tier
+        logger.info("Loading fastembed model: BAAI/bge-small-en-v1.5")
+        _embedding_model = TextEmbedding(model_name="BAAI/bge-small-en-v1.5")
+        logger.info("Fastembed model loaded successfully.")
     return _embedding_model
 
 
@@ -82,16 +82,12 @@ class LocalFAISSStore:
 
     def add_texts(self, texts: List[str], metadatas: List[Dict[str, Any]]):
         model = get_embedding_model()
-        # Compute embeddings efficiently with batching
-        embeddings = model.encode(
-            texts,
-            batch_size=32,
-            show_progress_bar=False,
-            convert_to_numpy=True,
-            normalize_embeddings=True
-        )
+        # fastembed returns a generator of numpy arrays
+        embeddings = np.array(list(model.embed(texts)))
+        # Normalize for cosine similarity (IndexFlatIP)
+        norms = np.linalg.norm(embeddings, axis=1, keepdims=True)
+        embeddings = embeddings / np.maximum(norms, 1e-9)
         
-        # Add to index
         self.index.add(embeddings)
         self.metadata.extend(metadatas)
         self.save_index()
@@ -101,7 +97,10 @@ class LocalFAISSStore:
             return []
         
         model = get_embedding_model()
-        query_vector = model.encode([query], batch_size=1, show_progress_bar=False, convert_to_numpy=True, normalize_embeddings=True)
+        query_vector = np.array(list(model.embed([query])))
+        # Normalize for cosine similarity
+        norm = np.linalg.norm(query_vector, axis=1, keepdims=True)
+        query_vector = query_vector / np.maximum(norm, 1e-9)
         
         distances, indices = self.index.search(query_vector, k)
         
