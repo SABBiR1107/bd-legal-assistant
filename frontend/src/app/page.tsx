@@ -72,6 +72,10 @@ export default function Home() {
       }
     }
 
+    if (!url.startsWith("http://") && !url.startsWith("https://")) {
+      url = `https://${url}`;
+    }
+
     if (url.endsWith("/api")) {
       url = url.slice(0, -4);
     }

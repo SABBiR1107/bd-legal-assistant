@@ -28,7 +28,7 @@ services:
         fromService:
           type: web
           name: bd-legal-assistant-backend
-          property: url
+          property: host
       - key: NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY
         sync: false
       - key: CLERK_SECRET_KEY

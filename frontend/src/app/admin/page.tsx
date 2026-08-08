@@ -50,6 +50,10 @@ export default function AdminDashboard() {
       }
     }
 
+    if (!url.startsWith("http://") && !url.startsWith("https://")) {
+      url = `https://${url}`;
+    }
+
     if (url.endsWith("/api")) {
       url = url.slice(0, -4);
     }
