@@ -57,7 +57,14 @@ export default function Home() {
   const [selectedCitation, setSelectedCitation] = useState<Citation | null>(null);
   const messagesEndRef = useRef<HTMLDivElement>(null);
 
-  const API_BASE = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
+  const getApiBase = () => {
+    let url = (process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000").trim().replace(/\/+$/, "");
+    if (url.endsWith("/api")) {
+      url = url.slice(0, -4);
+    }
+    return url;
+  };
+  const API_BASE = getApiBase();
 
   const samplePrompts = [
     { text: "What is the process of land registration under Bangladesh law?", category: "Property Law" },

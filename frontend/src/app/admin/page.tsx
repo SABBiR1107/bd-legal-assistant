@@ -35,7 +35,14 @@ export default function AdminDashboard() {
   const [backendError, setBackendError] = useState<string | null>(null);
   const [stats, setStats] = useState({ total_docs: 0, total_chunks: 0, faiss_status: "Healthy" });
 
-  const API_BASE = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000';
+  const getApiBase = () => {
+    let url = (process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000").trim().replace(/\/+$/, "");
+    if (url.endsWith("/api")) {
+      url = url.slice(0, -4);
+    }
+    return url;
+  };
+  const API_BASE = getApiBase();
 
   const fetchDocumentsAndStats = async () => {
     setLoadingDocs(true);
